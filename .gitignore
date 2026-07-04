@@ -1,0 +1,6 @@
+__pycache__/
+.vscode/
+command.txt
+
+mcs_lock
+ticket_lock

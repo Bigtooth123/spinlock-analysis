@@ -17,13 +17,19 @@ void ticket_lock_init(ticket_lock_t *l) {
     atomic_init(&l->serving, 0);
 }
 
-void ticket_lock_acquire(ticket_lock_t *l) {
+int ticket_lock_acquire(ticket_lock_t *l) {
     unsigned int my_ticket = atomic_fetch_add_explicit(&l->ticket, 1, memory_order_acquire);
+    unsigned int current = atomic_load_explicit(&l->serving, memory_order_relaxed);
     
+    // 計算當下的 k (包含自己，所以加 1)
+    int k = my_ticket - current + 1;
+
     // 自旋
     while (atomic_load_explicit(&l->serving, memory_order_acquire) != my_ticket) {
         __asm__ __volatile__("pause" ::: "memory"); // x86 暫停指令
     }
+
+    return k;
 }
 
 void ticket_lock_release(ticket_lock_t *l) {
@@ -47,6 +53,9 @@ volatile uint64_t global_counter = 0; // 共享臨界區資源
 atomic_int running = 1;               // 實驗執行旗標
 uint64_t thread_ops[8] = {0};
 
+// 紀錄每個執行緒遇到的 k 值次數，k 的數值介於 1 到 8 (包含自己)，所以陣列直接設定為 10 個元素，索引 0 與 9 不使用
+uint64_t thread_pk_hist[8][10] = {0}; 
+
 // ==========================================
 // 執行緒工作邏輯 (模擬爭搶 Spinlock)
 // ==========================================
@@ -63,11 +72,16 @@ void* worker_thread(void* arg) {
         fprintf(stderr, "pthread_setaffinity_np failed: %d\n", rc);
     }
 
+    // 局部變數，避免 False Sharing
+    uint64_t local_hist[10] = {0}; 
     uint64_t local_ops = 0;
 
     while (atomic_load_explicit(&running, memory_order_relaxed)) {
-        ticket_lock_acquire(&my_lock);
-        
+        int k = ticket_lock_acquire(&my_lock);
+        if (k >= 1 && k <= 8) {
+            local_hist[k]++;
+        }
+
         // --- Critical Section ---
         global_counter++; 
         for(volatile int i=0; i<50; i++); // 模擬鎖持有時間 (E)
@@ -81,6 +95,10 @@ void* worker_thread(void* arg) {
     }
 
     thread_ops[thread_id] = local_ops;
+    for(int i=1; i<=8; i++) {
+        thread_pk_hist[thread_id][i] = local_hist[i];
+    }
+
     return NULL;
 }
 
@@ -125,9 +143,29 @@ int main(int argc, char *argv[]) {
         total_ops += thread_ops[i];
     }
 
-    // 印出實驗結果
+    
+    // ==========================================
+    // 印出吞吐量
+    // ==========================================
     printf("核心數: %d | 總吞吐量 (次/秒): %lu | 計數器最終值: %lu\n", 
            num_threads, total_ops, global_counter);
            
+    // ==========================================
+    // 印出採樣到的 P_k 機率分佈
+    // ==========================================
+    uint64_t total_pk[9] = {0};
+    for (int i = 0; i < num_threads; i++) {
+        for (int k = 1; k <= num_threads; k++) {
+            total_pk[k] += thread_pk_hist[i][k];
+        }
+    }
+
+    printf("\n=== 狀態機率分佈 (P_k) ===\n");
+    for (int k = 1; k <= num_threads; k++) {
+        double prob = (double)total_pk[k] / total_ops;
+        printf("P_%d : %6.2f%% (%lu 次)\n", k, prob * 100.0, total_pk[k]);
+    }
+
+
     return 0;
 }

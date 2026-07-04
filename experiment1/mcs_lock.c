@@ -82,6 +82,24 @@ void mcs_spin_unlock(_Atomic(struct mcs_spinlock *) *lock,
 
 
 // ==========================================
+//以下是用來紀錄各個時間的排隊情況與數量，避免 False Sharing，將每個旗標對齊 64 Byte
+//並且會每 1000 次採樣 1 次，避免破壞 MCS spinlock 本地自旋的目的
+// ==========================================
+typedef struct {
+    atomic_int in_queue;
+    char padding[60]; // 填滿剩下的空間，確保每個 struct 獨佔一條 Cache Line
+} __attribute__((aligned(64))) thread_state_t;
+thread_state_t t_states[8];
+
+//紀錄 P_k 機率的陣列
+uint64_t thread_pk_hist[8][10] = {0}; 
+
+//採樣頻率：每 1000 次操作才擷取一次快照
+#define SAMPLE_RATE 1000
+
+
+
+// ==========================================
 // 實驗環境設定與全域變數
 // ==========================================
 // 前四個是大核，後四個是小核
@@ -109,9 +127,29 @@ void* worker_thread(void* arg) {
     }
 
     uint64_t local_ops = 0;
+    uint64_t local_hist[10] = {0}; // 區域統計，避免寫入全域變數
     struct mcs_spinlock node;
 
+    atomic_store_explicit(&t_states[thread_id].in_queue, 0, memory_order_relaxed); // 用來紀錄該執行緒是否在排隊中初始化為 0
+
     while (atomic_load_explicit(&running, memory_order_relaxed)) {
+        // 宣告自己準備進入鎖區間 (只寫入自己獨佔的 Cache Line，零干擾)
+        atomic_store_explicit(&t_states[thread_id].in_queue, 1, memory_order_release);
+
+        // 每 1000 次擷取一次系統採樣
+        if (local_ops % SAMPLE_RATE == 0) {
+            int k = 0;
+            // 讀取所有人的旗標 (這會產生極短暫的 Cache Read，但頻率極低)
+            for (int j = 0; j < 8; j++) {
+                if (atomic_load_explicit(&t_states[j].in_queue, memory_order_acquire)) {
+                    k++;
+                }
+            }
+            if (k >= 1 && k <= 8) {
+                local_hist[k]++;
+            }
+        }
+
         mcs_spin_lock(&my_lock, &node);
         
         // --- Critical Section ---
@@ -120,6 +158,7 @@ void* worker_thread(void* arg) {
         // ---------------------------------
         
         mcs_spin_unlock(&my_lock, &node);
+        atomic_store_explicit(&t_states[thread_id].in_queue, 0, memory_order_release);
         local_ops++;
         
         // 模擬再次發出請求的間隔 (T_arrive)
@@ -127,6 +166,9 @@ void* worker_thread(void* arg) {
     }
 
     thread_ops[thread_id] = local_ops;
+    for(int i = 1; i <= 8; i++) {
+        thread_pk_hist[thread_id][i] = local_hist[i];
+    }
     return NULL;
 }
 
@@ -171,9 +213,34 @@ int main(int argc, char *argv[]) {
         total_ops += thread_ops[i];
     }
 
-    // 印出實驗結果
+
+
+    // ==========================================
+    // 印出吞吐量
+    // ==========================================
     printf("核心數: %d | 總吞吐量 (次/秒): %lu | 計數器最終值: %lu\n", 
            num_threads, total_ops, global_counter);
+
+    // ==========================================
+    // 印出採樣到的 P_k 機率分佈
+    // ==========================================
+    uint64_t total_pk[9] = {0};
+    uint64_t total_samples = 0;
+
+    for (int i = 0; i < num_threads; i++) {
+        for (int k = 1; k <= num_threads; k++) {
+            total_pk[k] += thread_pk_hist[i][k];
+            total_samples += thread_pk_hist[i][k];
+        }
+    }
+
+    if (total_samples > 0) {
+        printf("\n=== 狀態機率分佈 (P_k, 採樣數: %lu) ===\n", total_samples);
+        for (int k = 1; k <= num_threads; k++) {
+            double prob = (double)total_pk[k] / total_samples;
+            printf("P_%d : %6.2f%% (%lu 次)\n", k, prob * 100.0, total_pk[k]);
+        }
+    }
            
     return 0;
 }
