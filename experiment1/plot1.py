@@ -2,13 +2,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Measured percentage data (P_1 to P_8)
-ticket_pk = [0.01, 0.00, 0.00, 0.00, 0.00, 0.05, 9.86, 90.07] 
-mcs_pk    = [0.01, 0.01, 0.01, 0.02, 0.15, 1.78, 36.76, 61.27]
+# 填入測量數值
+ticket_pk = [0.01, 0.00, 0.00, 0.00, 0.00, 0.03, 10.25, 89.70] 
+mcs_pk    = [0.01, 0.01, 0.01, 0.01, 0.04, 0.73, 42.70, 56.50]
 
 cores = np.arange(1, 9)
 width = 0.35  # Bar width
 
-plt.figure(figsize=(10, 8))
+plt.figure(figsize=(10, 6))
 
 # Plot bars side by side and store the returned objects for labeling
 bars1 = plt.bar(cores - width/2, ticket_pk, width, label='Ticket Lock (Measured)', color='salmon', alpha=0.8, edgecolor='black')
@@ -30,7 +31,7 @@ def add_labels(bars):
 add_labels(bars1)
 add_labels(bars2)
 
-plt.title('State Probability Distribution ($P_k$): Ticket lock vs MCS lock', fontsize=14, fontweight='bold')
+plt.title(f'Theoretical State Probability Distribution ($P_k$) at N=8', fontsize=14, fontweight='bold')
 plt.xlabel('Number of Queued Threads ($k$)', fontsize=12)
 plt.ylabel('Probability (%)', fontsize=12)
 plt.xticks(cores)

@@ -1,6 +1,6 @@
 import math
 import matplotlib.pyplot as plt
-import numpy as np  # 新增 numpy 處理直方圖的座標
+import numpy as np 
 
 def plot_throughput(ticket_lock, mcs_lock):
     cores = [1, 2, 3, 4, 5, 6, 7, 8]
@@ -64,7 +64,7 @@ def plot_pk(ticket_pk, mcs_pk, N):
 # ==========================================
 E = 10.0        # 臨界區執行時間 (對應 for i<50)
 T_arrive = 50.0 # 休息與重新發起請求的時間 (對應 for i<200)
-c = 50.0        # 跨 CPU 快取無效化與交接成本
+c = 60.0        # 跨 CPU 快取無效化與交接成本
 MAX_N = 8       # 模擬的最大核心數
 
 # ==========================================
@@ -150,7 +150,7 @@ for n in range(1, MAX_N + 1):
     ticket_lock.append(ticket_ops)
     mcs_lock.append(mcs_ops)
     
-    # [新增] 紀錄 N = MAX_N (即 8 核心) 時的 P_k 分佈，用來畫圖
+    # 紀錄 N = MAX_N (即 8 核心) 時的 P_k 分佈，用來畫圖
     if n == MAX_N:
         final_ticket_P = ticket_P
         final_mcs_P = mcs_P
