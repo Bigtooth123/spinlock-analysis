@@ -1,7 +1,8 @@
 import math
 import matplotlib.pyplot as plt
+import numpy as np  # 新增 numpy 處理直方圖的座標
 
-def plot(ticket_lock, mcs_lock):
+def plot_throughput(ticket_lock, mcs_lock):
     cores = [1, 2, 3, 4, 5, 6, 7, 8]
 
     plt.figure(figsize=(10, 6))
@@ -17,9 +18,45 @@ def plot(ticket_lock, mcs_lock):
     plt.tight_layout()
 
     plt.savefig('theory_lock_throughput_comparison.png')
+    plt.show() # 加上 show 顯示圖片
 
+# ==========================================
+# 繪製 P_k 機率分佈的函數
+# ==========================================
+def plot_pk(ticket_pk, mcs_pk, N):
+    cores = np.arange(1, N + 1)
+    width = 0.35  
 
+    plt.figure(figsize=(10, 6))
+    
+    # 畫出並排的長條圖
+    bars1 = plt.bar(cores - width/2, ticket_pk, width, label='Ticket Lock (Predicted)', color='salmon', alpha=0.8, edgecolor='black')
+    bars2 = plt.bar(cores + width/2, mcs_pk, width, label='MCS Lock (Predicted)', color='skyblue', alpha=0.8, edgecolor='black')
 
+    # 在柱狀圖上方加上數值標籤
+    def add_labels(bars):
+        for bar in bars:
+            height = bar.get_height()
+            plt.annotate(f'{height:.2f}%',
+                         xy=(bar.get_x() + bar.get_width() / 2, height),
+                         xytext=(0, 3),  
+                         textcoords="offset points",
+                         ha='center', va='bottom', 
+                         fontsize=8, rotation=45)
+
+    add_labels(bars1)
+    add_labels(bars2)
+
+    plt.title(f'Theoretical State Probability Distribution ($P_k$) at N={N}', fontsize=14, fontweight='bold')
+    plt.xlabel('Number of Queued Threads ($k$)', fontsize=12)
+    plt.ylabel('Probability (%)', fontsize=12)
+    plt.xticks(cores)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.legend(fontsize=12)
+    plt.tight_layout()
+
+    plt.savefig('theory_pk_distribution.png')
+    plt.show()
 
 
 # ==========================================
@@ -35,33 +72,28 @@ MAX_N = 8       # 模擬的最大核心數
 # ==========================================
 def predict_ticket_lock(N, E, T_arrive, c):
     W = [0.0] * (N + 1)
-    W[0] = 1.0  # 狀態 0 (無人排隊) 的基準權重
+    W[0] = 1.0  
     
-    # 迭代計算每個狀態的權重 W[k]
     for k in range(1, N + 1):
-        A_k = (N - (k - 1)) / T_arrive  # 推力 (到達率)
+        A_k = (N - (k - 1)) / T_arrive  
         if k == 1:
-            S_k = 1.0 / E                   # Fast Path: 沒人排隊，無交接成本
+            S_k = 1.0 / E                   
         else:
-            S_k = 1.0 / (E + (k * c) / 2.0) # Slow Path: 發生踩踏，交接成本從 1c 算起
+            S_k = 1.0 / (E + (k * c) / 2.0) 
             
         W[k] = W[k-1] * (A_k / S_k)
         
-    # 歸一化，計算出各狀態的真實發生機率 P[k]
     total_W = sum(W)
     P = [w / total_W for w in W]
     
-    # 計算期望值吞吐量
     expected_throughput = 0.0
     for k in range(1, N + 1):
-        # 【修改點 2】期望值計算也要同步套用分段函數
         if k == 1:
             S_k = 1.0 / E
         else:
             S_k = 1.0 / (E + (k * c) / 2.0)
         expected_throughput += P[k] * S_k
         
-    # 將 (次/奈秒) 轉換為 (次/秒)
     return expected_throughput * 1e9, P
 
 # ==========================================
@@ -73,12 +105,10 @@ def predict_mcs_lock(N, E, T_arrive, c):
     
     for k in range(1, N + 1):
         A_k = (N - (k - 1)) / T_arrive
-        
-        # 實作 MCS 的「分段函數」：有沒有人排隊，決定了 Fast/Slow path
         if k == 1:
-            S_k = 1.0 / E          # Fast Path: 沒人排隊，無交接成本
+            S_k = 1.0 / E          
         else:
-            S_k = 1.0 / (E + c)    # Slow Path: 有人排隊，固定常數交接成本
+            S_k = 1.0 / (E + c)    
             
         W[k] = W[k-1] * (A_k / S_k)
         
@@ -96,7 +126,7 @@ def predict_mcs_lock(N, E, T_arrive, c):
     return expected_throughput * 1e9, P
 
 # ==========================================
-# [4] 主程式：印出數據對比表
+# [4] 主程式：印出數據對比表並繪圖
 # ==========================================
 print(f"=== 物理參數設定 ===")
 print(f"臨界區執行時間 (E): {E} ns")
@@ -108,19 +138,30 @@ print("-" * 55)
 
 ticket_lock = []
 mcs_lock = []
+final_ticket_P = []
+final_mcs_P = []
 
 for n in range(1, MAX_N + 1):
     ticket_ops, ticket_P = predict_ticket_lock(n, E, T_arrive, c)
     mcs_ops, mcs_P = predict_mcs_lock(n, E, T_arrive, c)
 
-    # 格式化輸出，加上逗號方便閱讀
     print(f"{n:<10} | {int(ticket_ops):<20,} | {int(mcs_ops):<20,}")
 
     ticket_lock.append(ticket_ops)
     mcs_lock.append(mcs_ops)
     
+    # [新增] 紀錄 N = MAX_N (即 8 核心) 時的 P_k 分佈，用來畫圖
+    if n == MAX_N:
+        final_ticket_P = ticket_P
+        final_mcs_P = mcs_P
 
 print("-" * 55)
 
+# 1. 繪製並儲存 Throughput 折線圖
+plot_throughput(ticket_lock, mcs_lock)
 
-plot(ticket_lock, mcs_lock)
+# 2. 處理並繪製 P_k 機率直方圖 (取出 k=1 到 k=8，並轉成百分比)
+ticket_pk_percent = [p * 100 for p in final_ticket_P[1:]]
+mcs_pk_percent = [p * 100 for p in final_mcs_P[1:]]
+
+plot_pk(ticket_pk_percent, mcs_pk_percent, MAX_N)
