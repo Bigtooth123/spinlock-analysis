@@ -1,12 +1,19 @@
 import matplotlib.pyplot as plt
 
-cores = [1, 2, 3, 4, 5, 6, 7, 8]
-# 填入測量數值
-ticket_lock = [16638523 + 16921260, 25296468 + 25408638, 13949029 + 14396481, 11714140 + 11795145, 8613645 + 9176290, 7556864 + 7885566, 6568712 + 7113296, 5751216 + 5791345]
-mcs_lock = [16770505 + 16737875, 23014607 + 23536827, 15918493 + 16301237, 16686074 + 16549528, 15267013 + 16109687, 14742294 + 15187926, 14050993 + 14798794, 13733795 + 14714680]
+from benchmark_runner import collect_throughput
 
-ticket_lock = [x / 2 for x in ticket_lock]
-mcs_lock = [x / 2 for x in mcs_lock]
+#這邊的 thread 代表在 C 語言中最多可以啟動幾顆核心參與競爭，我的電腦只有 8 顆核心
+MAX_THREADS = 8
+RUNS = 1
+
+print("Compiling and running lock benchmarks...")
+ticket_lock, mcs_lock = collect_throughput(max_threads=MAX_THREADS, runs=RUNS)
+cores = list(range(1, MAX_THREADS + 1))
+
+print("\nMeasured throughput:")
+print(f"{'cores':<8} {'ticket_lock':<15} {'mcs_lock':<15}")
+for core, ticket, mcs in zip(cores, ticket_lock, mcs_lock):
+    print(f"{core:<8} {int(ticket):<15,} {int(mcs):<15,}")
 
 plt.figure(figsize=(10, 6))
 plt.plot(cores, ticket_lock, marker='o', linestyle='-', linewidth=2, label='Ticket Lock')

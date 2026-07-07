@@ -1,12 +1,21 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Measured percentage data (P_1 to P_8)
-# 填入測量數值
-ticket_pk = [0.01, 0.00, 0.00, 0.00, 0.00, 0.03, 10.25, 89.70] 
-mcs_pk    = [0.01, 0.01, 0.01, 0.01, 0.04, 0.73, 42.70, 56.50]
+from benchmark_runner import collect_probabilities
 
-cores = np.arange(1, 9)
+#這邊的 thread 代表在 C 語言啟動幾顆核心參與競爭
+THREADS = 8
+RUNS = 1
+
+print("Compiling and running lock benchmarks...")
+ticket_pk, mcs_pk = collect_probabilities(threads=THREADS, runs=RUNS)
+
+print("\nMeasured state probability distribution:")
+print(f"{'P_k':<8} {'ticket_lock':<15} {'mcs_lock':<15}")
+for k, ticket, mcs in zip(range(1, THREADS + 1), ticket_pk, mcs_pk):
+    print(f"P_{k:<6} {ticket:<15.2f} {mcs:<15.2f}")
+
+cores = np.arange(1, THREADS + 1)
 width = 0.35  # Bar width
 
 plt.figure(figsize=(10, 6))
@@ -31,7 +40,7 @@ def add_labels(bars):
 add_labels(bars1)
 add_labels(bars2)
 
-plt.title(f'Measured State Probability Distribution ($P_k$) at N=8', fontsize=14, fontweight='bold')
+plt.title(f'Measured State Probability Distribution ($P_k$) at N={THREADS}', fontsize=14, fontweight='bold')
 plt.xlabel('Number of threads in system ($k$)', fontsize=12)
 plt.ylabel('Probability (%)', fontsize=12)
 plt.xticks(cores)
