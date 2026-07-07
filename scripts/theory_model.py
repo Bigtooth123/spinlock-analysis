@@ -1,9 +1,8 @@
-import math
 import matplotlib.pyplot as plt
 import numpy as np 
 
 def plot_throughput(ticket_lock, mcs_lock):
-    cores = [1, 2, 3, 4, 5, 6, 7, 8]
+    cores = [i for i in range(1, len(ticket_lock) + 1)]
 
     plt.figure(figsize=(10, 6))
     plt.plot(cores, ticket_lock, marker='o', linestyle='-', linewidth=2, label='Ticket Lock')
@@ -48,14 +47,14 @@ def plot_pk(ticket_pk, mcs_pk, N):
     add_labels(bars2)
 
     plt.title(f'Theoretical State Probability Distribution ($P_k$) at N={N}', fontsize=14, fontweight='bold')
-    plt.xlabel('Number of Queued Threads ($k$)', fontsize=12)
+    plt.xlabel('Number of threads in system ($k$)', fontsize=12)
     plt.ylabel('Probability (%)', fontsize=12)
     plt.xticks(cores)
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.legend(fontsize=12)
     plt.tight_layout()
 
-    plt.savefig('theory_pk_distribution.png')
+    plt.savefig(f'theory_pk_distribution_{N}.png')
     plt.show()
 
 
@@ -138,10 +137,8 @@ print("-" * 55)
 
 ticket_lock = []
 mcs_lock = []
-final_ticket_P = []
-final_mcs_P = []
 
-for n in range(1, MAX_N + 1):
+for n in range(1, MAX_N + 1): # n 代表參預競爭的核心數量
     ticket_ops, ticket_P = predict_ticket_lock(n, E, T_arrive, c)
     mcs_ops, mcs_P = predict_mcs_lock(n, E, T_arrive, c)
 
@@ -150,18 +147,13 @@ for n in range(1, MAX_N + 1):
     ticket_lock.append(ticket_ops)
     mcs_lock.append(mcs_ops)
     
-    # 紀錄 N = MAX_N (即 8 核心) 時的 P_k 分佈，用來畫圖
-    if n == MAX_N:
-        final_ticket_P = ticket_P
-        final_mcs_P = mcs_P
+    # 處理並繪製 P_k 機率直方圖 (取出 k=1 到 k=n，並轉成百分比)
+    ticket_pk_percent = [p * 100 for p in ticket_P[1:]]
+    mcs_pk_percent = [p * 100 for p in mcs_P[1:]]
+
+    plot_pk(ticket_pk_percent, mcs_pk_percent, n)
 
 print("-" * 55)
 
 # 1. 繪製並儲存 Throughput 折線圖
 plot_throughput(ticket_lock, mcs_lock)
-
-# 2. 處理並繪製 P_k 機率直方圖 (取出 k=1 到 k=8，並轉成百分比)
-ticket_pk_percent = [p * 100 for p in final_ticket_P[1:]]
-mcs_pk_percent = [p * 100 for p in final_mcs_P[1:]]
-
-plot_pk(ticket_pk_percent, mcs_pk_percent, MAX_N)

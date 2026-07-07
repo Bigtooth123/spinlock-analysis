@@ -31,8 +31,8 @@ def add_labels(bars):
 add_labels(bars1)
 add_labels(bars2)
 
-plt.title(f'Theoretical State Probability Distribution ($P_k$) at N=8', fontsize=14, fontweight='bold')
-plt.xlabel('Number of Queued Threads ($k$)', fontsize=12)
+plt.title(f'Measured State Probability Distribution ($P_k$) at N=8', fontsize=14, fontweight='bold')
+plt.xlabel('Number of threads in system ($k$)', fontsize=12)
 plt.ylabel('Probability (%)', fontsize=12)
 plt.xticks(cores)
 plt.grid(axis='y', linestyle='--', alpha=0.7)
