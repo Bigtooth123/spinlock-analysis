@@ -1,6 +1,5 @@
 import re
 import subprocess
-import tempfile
 from pathlib import Path
 
 
@@ -15,8 +14,7 @@ BENCHMARKS = {
 
 def compile_benchmark(lock_name):
     source = BENCHMARKS[lock_name]
-    output_dir = Path(tempfile.gettempdir()) / "qspinlock-analysis-benchmarks"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = ROOT_DIR / "scripts"
     binary = output_dir / f"{lock_name}_lock"
 
     subprocess.run(
