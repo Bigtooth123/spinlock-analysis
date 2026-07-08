@@ -83,7 +83,7 @@ void mcs_spin_unlock(_Atomic(struct mcs_spinlock *) *lock,
 
 // ==========================================
 //以下是用來紀錄各個時間的排隊情況與數量，避免 False Sharing，將每個旗標對齊 64 Byte
-//並且會每 1000 次採樣 1 次，避免破壞 MCS spinlock 本地自旋的目的
+//並且會每 SAMPLE_RATE 次採樣 1 次，避免破壞 MCS spinlock 本地自旋的目的
 // ==========================================
 typedef struct {
     atomic_int in_queue;
@@ -94,8 +94,8 @@ thread_state_t t_states[8];
 //紀錄 P_k 機率的陣列
 uint64_t thread_pk_hist[8][10] = {0}; 
 
-//採樣頻率：每 1000 次操作才擷取一次快照
-#define SAMPLE_RATE 1000
+//採樣頻率：每 100 次操作才擷取一次快照
+#define SAMPLE_RATE 100
 
 
 
@@ -136,7 +136,7 @@ void* worker_thread(void* arg) {
         // 宣告自己準備進入鎖區間 (只寫入自己獨佔的 Cache Line，零干擾)
         atomic_store_explicit(&t_states[thread_id].in_queue, 1, memory_order_release);
 
-        // 每 1000 次擷取一次系統採樣
+        // 每 SAMPLE_RATE 次擷取一次系統採樣
         if (local_ops % SAMPLE_RATE == 0) {
             int k = 0;
             // 讀取所有人的旗標 (這會產生極短暫的 Cache Read，但頻率極低)
